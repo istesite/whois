@@ -4,7 +4,7 @@ class cWhois {
 	var $whoisContent;
 	var $detailWhois = true;
 	var $error = array();
-	var $debug = true;
+	var $debug = false;
 	var $whoisServer = '';
 	var $defaultTimeZone;
 	
@@ -13,6 +13,8 @@ class cWhois {
 	}
 	
 	function cWhois($domain){
+		$this->error_reporting_status = error_reporting();
+		error_reporting($this->error_reporting_status & ~E_WARNING);
 		if(!empty($domain)){
 			$this->setDomain($domain);
 			return $this->whois();
@@ -74,13 +76,9 @@ class cWhois {
 		$response = $this->getSocketResult($domain, $this->whoisServer);
 
 		$lastWhoisServer = $this->parseWhoisServer($this->parseWhois(strtolower($response)));
-
 		if($this->whoisServer != $lastWhoisServer and $lastWhoisServer != ''){
 			$this->whoisServer = $lastWhoisServer;
 			$response = $this->getSocketResult($domain, $lastWhoisServer);
-		}
-		else{
-			$response = false;
 		}
 
 		if($this->detailWhois){
@@ -89,9 +87,6 @@ class cWhois {
 				$this->whoisServer = $parseWhois['Whois Server'];
 				$response = $this->getSocketResult($domain, $this->whoisServer);
 			}
-		}
-		else{
-			$response = false;
 		}
 		
 		if($response != false){
@@ -102,8 +97,22 @@ class cWhois {
 	}
 
 	function getSocketResult($domain, $server){
-		$con = fsockopen($server, 43);
-		fputs($con, $domain."\r\n");
+		$reConCount = 2;	//-> ReConnection count.
+		while($reConCount > 0){
+			if(!$con = fsockopen($server, 43, $errno, $errstr, 3)){
+				fclose($con);
+				$this->setError("$server not connected!");
+				if($reConCount == 1){
+					return "$server not connected!";
+				}
+			}
+			else{
+				break;
+			}
+			$reConCount--;
+			sleep(15);
+		}
+		fputs($con, $domain."\n");
 
 		$response = "";
 		while(!feof($con)){
@@ -111,6 +120,7 @@ class cWhois {
 		}
 		$response = preg_replace("/%.*\n/", "", $response);
 		fclose($con);
+		
 		return $response;
 	}
 
@@ -135,6 +145,7 @@ class cWhois {
 		if(empty($whoisText)){
 			$whoisText = $this->whoisContent;
 		}
+	
 		if(is_string($whoisText)){
 			$whoisText = str_replace(array("\r", "<<<", ">>>"), "", $whoisText);
 			$rows = explode("\n", $whoisText);
@@ -176,13 +187,16 @@ class cWhois {
 	function __destruct(){
 		if($this->debug){
 			if(count($this->error) > 0){
-				echo var_dump($this->error, true);
+				echo "ERROR:\n<pre>" . var_export($this->error, true);
 			}
 		}
+		error_reporting($this->error_reporting_status);
 	}
 	
 	function getWhoisServer($tld){
 		$whoisServers = array(
+			//'com.tr' => 'whois.metu.edu.tr',
+			//'com.tr' => 'tr.whois-server.net',
 			//'com'  => 'whois.crsnic.net',
 			//'net'  => 'whois.crsnic.net',
 			//'org'  => 'whois.publicinterestregistry.net',

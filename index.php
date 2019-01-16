@@ -1,4 +1,5 @@
 <?php
+header('Content-Type: text/html; charset=ISO-8859-9');
 include_once "whois.php";
 
 if (php_sapi_name() == "cli") {
